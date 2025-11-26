@@ -21,7 +21,7 @@ const crypto = require('crypto');
 const axios = require('axios');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT) || 3000;
 
 // Environment validation
 const HUBSPOT_API_KEY = process.env.HUBSPOT_API_KEY;
