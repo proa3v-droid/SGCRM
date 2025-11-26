@@ -2,10 +2,10 @@
   "name": "salesgodscrm-hubspot-webhook",
   "version": "1.0.0",
   "description": "Webhook receiver for SalesGodCRM → HubSpot contact sync integration",
-  "main": "sgcrm-hubspot-webhook.js",
+  "main": "integratiom.js",
   "scripts": {
-    "start": "node sgcrm-hubspot-webhook.js",
-    "dev": "nodemon sgcrm-hubspot-webhook.js",
+    "start": "node integratiom.js",
+    "dev": "nodemon integratiom.js",
     "test": "curl http://localhost:3000/health"
   },
   "keywords": [
