@@ -156,6 +156,52 @@ async function updateHubSpotContact(contactId, propertiesToUpdate) {
 }
 
 // ============================================================================
+// Lead Qualification Logic
+// ============================================================================
+const GOOD_STATUSES = ['Active'];  // phone is usable
+const GOOD_TAGS = [
+  'Hot Lead',
+  'Interested Auto',
+  'Appt Set',
+  'Schedule Call',
+  '24 Hour Follow Up',
+  'Missed Appt',
+  'Sold'
+];
+
+const BAD_STATUSES = [
+  'Blocked',
+  'Invalid',
+  'Reported Invalid',
+  'Landline',
+  'User OptOut',
+  'User OptOut DNC',
+  'Stop Word'
+];
+
+function isQualifiedLead(status, tagsRaw) {
+  // Normalize
+  const statusClean = (status || '').trim();
+  const tagsArray = Array.isArray(tagsRaw)
+    ? tagsRaw
+    : (tagsRaw || '').split(',').map(t => t.trim()).filter(Boolean);
+
+  // Hard reject bad phone/status
+  if (BAD_STATUSES.includes(statusClean)) {
+    return false;
+  }
+
+  // Must be active
+  if (!GOOD_STATUSES.includes(statusClean)) {
+    return false;
+  }
+
+  // Needs at least one good tag
+  const hasGoodTag = tagsArray.some(tag => GOOD_TAGS.includes(tag));
+  return hasGoodTag;
+}
+
+// ============================================================================
 // Webhook Endpoints
 // ============================================================================
 
@@ -197,7 +243,25 @@ app.post('/webhook/salesgodscrm', async (req, res) => {
       });
     }
 
-    console.log(`Processing ${event || 'contact'} for ${contactEmail}`);
+    // Extract status and tags for qualification
+    const status = req.body.status || contact?.status || data?.status;
+    const tags = req.body.tags || contact?.tags || data?.tags;
+
+    // Check if this is a qualified lead
+    const qualified = isQualifiedLead(status, tags);
+    
+    if (!qualified) {
+      console.log(`Skipping unqualified contact ${contactEmail} (status=${status}, tags=${tags})`);
+      return res.status(200).json({ 
+        success: true, 
+        skipped: true,
+        reason: 'Contact does not meet qualification criteria',
+        status: status,
+        tags: tags
+      });
+    }
+
+    console.log(`Processing qualified ${event || 'contact'} for ${contactEmail} (status=${status})`);
 
     // ========================================================================
     // Get or Create Contact in HubSpot
@@ -215,9 +279,10 @@ app.post('/webhook/salesgodscrm', async (req, res) => {
     // ========================================================================
     // Update source_system Property
     // ========================================================================
-    // Build properties to update (always include source_system)
+    // Build properties to update (always include source_system and qualified status)
     const propertiesToUpdate = {
-      source_system: 'SGCRM'
+      source_system: 'SGCRM',
+      lifecyclestage: 'lead'  // Mark as qualified lead
     };
 
     // Include additional fields from SalesGodCRM if they differ
