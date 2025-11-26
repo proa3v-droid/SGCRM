@@ -158,7 +158,7 @@ async function updateHubSpotContact(contactId, propertiesToUpdate) {
 // ============================================================================
 // Lead Qualification Logic
 // ============================================================================
-const GOOD_STATUSES = ['Active'];  // phone is usable
+const GOOD_STATUSES = ['active', 'Active'];  // phone is usable (case insensitive)
 const GOOD_TAGS = [
   'Hot Lead',
   'Interested Auto',
@@ -170,35 +170,44 @@ const GOOD_TAGS = [
 ];
 
 const BAD_STATUSES = [
+  'blocked',
   'Blocked',
+  'invalid',
   'Invalid',
   'Reported Invalid',
+  'landline',
   'Landline',
   'User OptOut',
   'User OptOut DNC',
   'Stop Word'
 ];
 
-function isQualifiedLead(status, tagsRaw) {
+function isQualifiedLead(status, tagsRaw, type) {
   // Normalize
-  const statusClean = (status || '').trim();
+  const statusClean = (status || '').trim().toLowerCase();
   const tagsArray = Array.isArray(tagsRaw)
     ? tagsRaw
     : (tagsRaw || '').split(',').map(t => t.trim()).filter(Boolean);
 
   // Hard reject bad phone/status
-  if (BAD_STATUSES.includes(statusClean)) {
+  if (BAD_STATUSES.map(s => s.toLowerCase()).includes(statusClean)) {
     return false;
   }
 
   // Must be active
-  if (!GOOD_STATUSES.includes(statusClean)) {
+  if (!GOOD_STATUSES.map(s => s.toLowerCase()).includes(statusClean)) {
     return false;
   }
 
-  // Needs at least one good tag
-  const hasGoodTag = tagsArray.some(tag => GOOD_TAGS.includes(tag));
-  return hasGoodTag;
+  // If tags exist and none are good, reject
+  // If no tags field exists, allow if status is active (default behavior)
+  if (tagsRaw && tagsArray.length > 0) {
+    const hasGoodTag = tagsArray.some(tag => GOOD_TAGS.includes(tag));
+    return hasGoodTag;
+  }
+
+  // No tags field = qualify based on status only
+  return true;
 }
 
 // ============================================================================
@@ -248,18 +257,20 @@ app.post('/webhook/salesgodscrm', async (req, res) => {
       });
     }
 
-    // Extract status and tags for qualification
+    // Extract status, tags, and type for qualification
     const status = req.body.status || contact?.status || data?.status;
     const tags = req.body.tags || contact?.tags || data?.tags;
+    const type = req.body.type || contact?.type || data?.type;
 
     console.log('Extracted qualification data:');
     console.log('  - Status:', status);
+    console.log('  - Type:', type);
     console.log('  - Tags:', tags);
     console.log('  - Tags type:', typeof tags);
     console.log('  - Is array?', Array.isArray(tags));
 
     // Check if this is a qualified lead
-    const qualified = isQualifiedLead(status, tags);
+    const qualified = isQualifiedLead(status, tags, type);
     
     console.log('Qualification result:', qualified);
     
