@@ -207,7 +207,12 @@ function isQualifiedLead(status, tagsRaw) {
 
 // SalesGodCRM Webhook
 app.post('/webhook/salesgodscrm', async (req, res) => {
+  console.log('========================================');
   console.log('Received SalesGodCRM webhook');
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('Full payload:', JSON.stringify(req.body, null, 2));
+  console.log('Payload keys:', Object.keys(req.body));
+  console.log('========================================');
 
   try {
     // Verify signature if secret is configured
@@ -247,11 +252,19 @@ app.post('/webhook/salesgodscrm', async (req, res) => {
     const status = req.body.status || contact?.status || data?.status;
     const tags = req.body.tags || contact?.tags || data?.tags;
 
+    console.log('Extracted qualification data:');
+    console.log('  - Status:', status);
+    console.log('  - Tags:', tags);
+    console.log('  - Tags type:', typeof tags);
+    console.log('  - Is array?', Array.isArray(tags));
+
     // Check if this is a qualified lead
     const qualified = isQualifiedLead(status, tags);
     
+    console.log('Qualification result:', qualified);
+    
     if (!qualified) {
-      console.log(`Skipping unqualified contact ${contactEmail} (status=${status}, tags=${tags})`);
+      console.log(`❌ Skipping unqualified contact ${contactEmail}`);
       return res.status(200).json({ 
         success: true, 
         skipped: true,
@@ -261,7 +274,7 @@ app.post('/webhook/salesgodscrm', async (req, res) => {
       });
     }
 
-    console.log(`Processing qualified ${event || 'contact'} for ${contactEmail} (status=${status})`);
+    console.log(`✅ Processing qualified ${event || 'contact'} for ${contactEmail}`);
 
     // ========================================================================
     // Get or Create Contact in HubSpot
