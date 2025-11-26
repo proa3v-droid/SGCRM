@@ -1,0 +1,12 @@
+version: 2
+services:
+  - type: web
+    name: sgcrm-hubspot-webhook
+    runtime: node
+    buildCommand: npm install
+    startCommand: node integratiom.js
+    envVars:
+      - key: HUBSPOT_API_KEY
+        sync: false
+      - key: PORT
+        value: 10000
