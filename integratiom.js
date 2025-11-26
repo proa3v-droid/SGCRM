@@ -156,8 +156,10 @@ async function updateHubSpotContact(contactId, propertiesToUpdate) {
 }
 
 // ============================================================================
-// Webhook Endpoint
+// Webhook Endpoints
 // ============================================================================
+
+// SalesGodCRM Webhook
 app.post('/webhook/salesgodscrm', async (req, res) => {
   console.log('Received SalesGodCRM webhook');
 
@@ -249,6 +251,112 @@ app.post('/webhook/salesgodscrm', async (req, res) => {
       email: contactEmail,
       action: hubspotContact.found ? 'updated_existing' : 'created_new',
       source_system: 'SGCRM',
+      properties_updated: Object.keys(propertiesToUpdate)
+    };
+
+    console.log('Sync successful:', JSON.stringify(auditLog, null, 2));
+
+    return res.status(200).json({
+      success: true,
+      hubspotContactId: contactId,
+      action: hubspotContact.found ? 'updated' : 'created',
+      auditLog
+    });
+
+  } catch (error) {
+    console.error('Webhook processing error:', error.message);
+
+    // Return 500 to trigger retry with backoff
+    return res.status(500).json({
+      error: 'Webhook processing failed',
+      message: error.message
+    });
+  }
+});
+
+// Smartlead Webhook
+app.post('/webhook/smartlead', async (req, res) => {
+  console.log('Received Smartlead webhook');
+
+  try {
+    // Verify signature if secret is configured
+    if (!verifyWebhookSignature(req)) {
+      console.error('HMAC verification failed');
+      return res.status(401).json({ error: 'Unauthorized: Invalid signature' });
+    }
+
+    // Parse payload (adapt fields below to match Smartlead format)
+    const {
+      event,
+      data,
+      contact,
+      email,
+      phoneNumber,
+      firstName,
+      lastName,
+      company,
+      id: smartleadId,
+      timestamp
+    } = req.body;
+
+    // Get contact email (adjust if Smartlead uses different fields)
+    const contactEmail = email || contact?.email || data?.email;
+    if (!contactEmail) {
+      console.error('Missing email in webhook payload');
+      return res.status(400).json({
+        error: 'Missing email in webhook payload',
+        payload: req.body
+      });
+    }
+
+    console.log(`Processing ${event || 'contact'} for ${contactEmail}`);
+
+    // Prepare contact info
+    const contactInfo = {
+      firstName: firstName || contact?.firstName || data?.firstName,
+      lastName: lastName || contact?.lastName || data?.lastName,
+      phone: phoneNumber || contact?.phoneNumber || data?.phoneNumber,
+      company: company || contact?.company || data?.company
+    };
+
+    // Find or create HubSpot contact
+    const hubspotContact = await getOrCreateHubSpotContact(contactEmail, contactInfo);
+    const contactId = hubspotContact.contactId;
+
+    // Build properties to update - tag as "Smartlead"
+    const propertiesToUpdate = {
+      source_system: 'Smartlead'
+    };
+
+    // Include additional fields from Smartlead if they differ
+    if (contactInfo.firstName && !hubspotContact.properties?.firstname?.value) {
+      propertiesToUpdate.firstname = contactInfo.firstName;
+    }
+    if (contactInfo.lastName && !hubspotContact.properties?.lastname?.value) {
+      propertiesToUpdate.lastname = contactInfo.lastName;
+    }
+    if (contactInfo.phone && !hubspotContact.properties?.phone?.value) {
+      propertiesToUpdate.phone = contactInfo.phone;
+    }
+    if (contactInfo.company && !hubspotContact.properties?.company?.value) {
+      propertiesToUpdate.company = contactInfo.company;
+    }
+
+    // Add Smartlead ID to a custom field if available
+    if (smartleadId) {
+      propertiesToUpdate.smartlead_contact_id = smartleadId;
+    }
+
+    await updateHubSpotContact(contactId, propertiesToUpdate);
+
+    // Log and Return Success
+    const auditLog = {
+      timestamp: new Date().toISOString(),
+      smartlead_id: smartleadId,
+      hubspot_contact_id: contactId,
+      email: contactEmail,
+      action: hubspotContact.found ? 'updated_existing' : 'created_new',
+      source_system: 'Smartlead',
       properties_updated: Object.keys(propertiesToUpdate)
     };
 
