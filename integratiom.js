@@ -291,51 +291,41 @@ app.post('/webhook/smartlead', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized: Invalid signature' });
     }
 
-    // Parse payload (adapt fields below to match Smartlead format)
+    // Parse Smartlead webhook payload
     const {
-      event,
-      data,
-      contact,
-      email,
-      phoneNumber,
-      firstName,
-      lastName,
-      company,
-      id: smartleadId,
-      timestamp,
-      lead,
-      prospect
+      to_email,
+      to_name,
+      sl_lead_email,
+      campaign_name,
+      campaign_id,
+      event_type,
+      sl_email_lead_id,
+      from_email
     } = req.body;
 
-    // Get contact email (adjust if Smartlead uses different fields)
-    let contactEmail = email || contact?.email || data?.email || lead?.email || prospect?.email || data?.lead?.email;
-    
-    // If no email in payload, try to extract from message_id or other fields
-    if (!contactEmail && req.body.reply_message_message_id) {
-      // Extract email from message ID like <id@zendesk.com>
-      const match = req.body.reply_message_message_id.match(/<([^@]+@[^>]+)>/);
-      if (match) contactEmail = match[1];
-    }
+    // Get contact email from Smartlead fields
+    const contactEmail = to_email || sl_lead_email;
     
     if (!contactEmail) {
       console.error('Missing email in webhook payload');
       console.error('Available fields:', Object.keys(req.body));
       return res.status(400).json({
-        error: 'Missing email in webhook payload - please configure Smartlead to send lead email',
+        error: 'Missing email in webhook payload',
         payload: req.body,
-        availableFields: Object.keys(req.body),
-        message: 'Check Smartlead webhook settings to include lead/contact data'
+        availableFields: Object.keys(req.body)
       });
     }
 
-    console.log(`Processing ${event || 'contact'} for ${contactEmail}`);
+    console.log(`Processing Smartlead ${event_type || 'event'} for ${contactEmail}`);
 
-    // Prepare contact info
+    // Prepare contact info from Smartlead data
+    // Split to_name if it contains first and last name
+    const nameParts = to_name ? to_name.split(' ') : [];
     const contactInfo = {
-      firstName: firstName || contact?.firstName || data?.firstName,
-      lastName: lastName || contact?.lastName || data?.lastName,
-      phone: phoneNumber || contact?.phoneNumber || data?.phoneNumber,
-      company: company || contact?.company || data?.company
+      firstName: nameParts[0] || null,
+      lastName: nameParts.slice(1).join(' ') || null,
+      phone: null,
+      company: null
     };
 
     // Find or create HubSpot contact
@@ -361,9 +351,12 @@ app.post('/webhook/smartlead', async (req, res) => {
       propertiesToUpdate.company = contactInfo.company;
     }
 
-    // Add Smartlead ID to a custom field if available
-    if (smartleadId) {
-      propertiesToUpdate.smartlead_contact_id = smartleadId;
+    // Add Smartlead IDs to custom fields if available
+    if (sl_email_lead_id) {
+      propertiesToUpdate.smartlead_lead_id = sl_email_lead_id;
+    }
+    if (campaign_name) {
+      propertiesToUpdate.smartlead_campaign = campaign_name;
     }
 
     await updateHubSpotContact(contactId, propertiesToUpdate);
@@ -371,7 +364,9 @@ app.post('/webhook/smartlead', async (req, res) => {
     // Log and Return Success
     const auditLog = {
       timestamp: new Date().toISOString(),
-      smartlead_id: smartleadId,
+      smartlead_lead_id: sl_email_lead_id,
+      smartlead_campaign: campaign_name,
+      event_type: event_type,
       hubspot_contact_id: contactId,
       email: contactEmail,
       action: hubspotContact.found ? 'updated_existing' : 'created_new',
