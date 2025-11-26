@@ -277,6 +277,7 @@ app.post('/webhook/salesgodscrm', async (req, res) => {
 // Smartlead Webhook
 app.post('/webhook/smartlead', async (req, res) => {
   console.log('Received Smartlead webhook');
+  console.log('Full payload:', JSON.stringify(req.body, null, 2));
 
   try {
     // Verify signature if secret is configured
@@ -296,16 +297,20 @@ app.post('/webhook/smartlead', async (req, res) => {
       lastName,
       company,
       id: smartleadId,
-      timestamp
+      timestamp,
+      lead,
+      prospect
     } = req.body;
 
     // Get contact email (adjust if Smartlead uses different fields)
-    const contactEmail = email || contact?.email || data?.email;
+    const contactEmail = email || contact?.email || data?.email || lead?.email || prospect?.email || data?.lead?.email;
     if (!contactEmail) {
       console.error('Missing email in webhook payload');
+      console.error('Available fields:', Object.keys(req.body));
       return res.status(400).json({
         error: 'Missing email in webhook payload',
-        payload: req.body
+        payload: req.body,
+        availableFields: Object.keys(req.body)
       });
     }
 
