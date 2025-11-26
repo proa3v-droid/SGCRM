@@ -276,8 +276,13 @@ app.post('/webhook/salesgodscrm', async (req, res) => {
 
 // Smartlead Webhook
 app.post('/webhook/smartlead', async (req, res) => {
+  console.log('========================================');
   console.log('Received Smartlead webhook');
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
   console.log('Full payload:', JSON.stringify(req.body, null, 2));
+  console.log('Payload keys:', Object.keys(req.body));
+  console.log('========================================');
 
   try {
     // Verify signature if secret is configured
@@ -303,14 +308,23 @@ app.post('/webhook/smartlead', async (req, res) => {
     } = req.body;
 
     // Get contact email (adjust if Smartlead uses different fields)
-    const contactEmail = email || contact?.email || data?.email || lead?.email || prospect?.email || data?.lead?.email;
+    let contactEmail = email || contact?.email || data?.email || lead?.email || prospect?.email || data?.lead?.email;
+    
+    // If no email in payload, try to extract from message_id or other fields
+    if (!contactEmail && req.body.reply_message_message_id) {
+      // Extract email from message ID like <id@zendesk.com>
+      const match = req.body.reply_message_message_id.match(/<([^@]+@[^>]+)>/);
+      if (match) contactEmail = match[1];
+    }
+    
     if (!contactEmail) {
       console.error('Missing email in webhook payload');
       console.error('Available fields:', Object.keys(req.body));
       return res.status(400).json({
-        error: 'Missing email in webhook payload',
+        error: 'Missing email in webhook payload - please configure Smartlead to send lead email',
         payload: req.body,
-        availableFields: Object.keys(req.body)
+        availableFields: Object.keys(req.body),
+        message: 'Check Smartlead webhook settings to include lead/contact data'
       });
     }
 
