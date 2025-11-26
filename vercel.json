@@ -1,0 +1,18 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "integratiom.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "integratiom.js"
+    }
+  ],
+  "env": {
+    "HUBSPOT_API_KEY": "@hubspot_api_key"
+  }
+}
