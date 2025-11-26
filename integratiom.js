@@ -332,9 +332,9 @@ app.post('/webhook/smartlead', async (req, res) => {
     const hubspotContact = await getOrCreateHubSpotContact(contactEmail, contactInfo);
     const contactId = hubspotContact.contactId;
 
-    // Build properties to update - tag as "Smartlead"
+    // Build properties to update - tag as "Smartlead Email Campaign"
     const propertiesToUpdate = {
-      source_system: 'Smartlead'
+      source_system: 'Smartlead Email Campaign'
     };
 
     // Include additional fields from Smartlead if they differ
@@ -351,13 +351,8 @@ app.post('/webhook/smartlead', async (req, res) => {
       propertiesToUpdate.company = contactInfo.company;
     }
 
-    // Add Smartlead IDs to custom fields if available
-    if (sl_email_lead_id) {
-      propertiesToUpdate.smartlead_lead_id = sl_email_lead_id;
-    }
-    if (campaign_name) {
-      propertiesToUpdate.smartlead_campaign = campaign_name;
-    }
+    // Note: Custom properties like smartlead_lead_id and smartlead_campaign
+    // need to be created in HubSpot first if you want to store these values
 
     await updateHubSpotContact(contactId, propertiesToUpdate);
 
